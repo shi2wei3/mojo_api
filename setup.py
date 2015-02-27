@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 here = os.path.abspath(os.path.dirname(__file__))
 
 setup(name='mojo_api',
-      version='0.1',
+      version='0.2',
       description='Mojo api',
       long_description='Mojo api',
       classifiers=[
@@ -20,6 +20,6 @@ setup(name='mojo_api',
       zip_safe=False,
       entry_points="""\
       [console_scripts]
-      mojo = mojo_api.mojo:main
+      mojo = mojo_api.mojo_report:main
       """,
       )

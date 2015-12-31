@@ -1,13 +1,12 @@
 from mojo_api import MOJOApi, Report
 import argparse
-import getpass
 import logging
 import json
 import os
 
 
 def main():
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", type=str, dest='filter_method', choices=['subject', 'from', 'body'],
                         help="Filter method for Emails", required=False)
@@ -17,19 +16,16 @@ def main():
                         help="Report document id", required=False)
     parser.add_argument("-t", type=str, dest='title',
                         help="Report title", required=False)
+    parser.add_argument("-p", type=str, dest='place_id',
+                        help="place id", required=False)
     parser.add_argument("-m", type=int, dest='months',
                         help="Count of months to check for Emails", required=False)
-    parser.add_argument("-e", action="store_true", dest='delete',
+    parser.add_argument("-d", action="store_true", dest='delete',
                         help="Delete all mojo pages in the report document id", required=False)
-    parser.add_argument("-u", type=str, dest='username',
-                        help="kerberos username, will be prompted if not specified", required=False)
-    parser.add_argument("-p", type=str, dest='password',
-                        help="kerberos password, will be prompted if not specified", required=False)
     parser.add_argument("-x", action="store_true", dest='dry_run',
                         help="enable dry-run mode", required=False)
-    parser.add_argument("-d", action="store_true", dest='debug',
+    parser.add_argument("-v", action="store_true", dest='debug',
                         help="enable debug messages", required=False)
-
 
     args = parser.parse_args()
     if args.debug is True:
@@ -37,7 +33,6 @@ def main():
         logging.debug("Running in debug mode")
     else:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-        logging.info("Running in normal mode")
     # load config file
     config = {}
     try:
@@ -47,21 +42,6 @@ def main():
         if e.errno == 2:
             logging.debug("Config file /.mojo_report.cfg not founded.")
 
-    # get username/password
-    if args.username:
-        username = args.username
-    elif config.get('kerberos_username'):
-        username = config['kerberos_username']
-    else:
-        username = raw_input("Username [%s]: " % getpass.getuser())
-        if not username:
-            username = getpass.getuser()
-    if args.password:
-        password = args.password
-    elif config.get('kerberos_password'):
-        password = config['kerberos_password']
-    else:
-        password = getpass.getpass('Please enter your kerberos password:')
     # get report_id or report title
     if args.report_id:
         try:
@@ -124,7 +104,9 @@ def main():
     else:
         filter_key = None
     # place_id
-    if config.get('place_id'):
+    if args.place_id:
+        place_id = args.place_id
+    elif config.get('place_id'):
         place_id = config['place_id']
     else:
         place_id = None
@@ -134,7 +116,7 @@ def main():
     else:
         mail_list = None
 
-    mojo = MOJOApi(username, password)
+    mojo = MOJOApi()
 
     report = Report(mojo, months=months, place_id=place_id, title=title, mail_list=mail_list, filter_method=filter_method, filter_key=filter_key)
     if args.delete:

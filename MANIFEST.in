@@ -1,0 +1,3 @@
+include MANIFEST.in README.md
+include mojo_api.spec
+recursive-include *.py

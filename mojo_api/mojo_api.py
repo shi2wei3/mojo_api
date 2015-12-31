@@ -17,29 +17,21 @@ import bs4
 import datetime
 import gzip
 import os
+from mojo_auth import mojo_auth
 
 
 class MOJOSession(object):
-    def __init__(self, username, password):
-        user_agent = "Mozilla/5.0 (X11; Linux x86_64; rv:34.0) Gecko/20100101 Firefox/34.0"
-        base_url = "https://mojo.redhat.com/api/core/v3/"
-        # init requests session
-        self.base_url = base_url
+    def __init__(self):
         self.s = requests.Session()
-        self.s.auth = (username, password)
-        headers = {"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Encoding":"gzip, deflate",
-                    "Accept-Language":"en-US,en;q=0.5",
-                    "Cache-Control":"no-cache",
-                    "Connection":"keep-alive",
-                    "User-Agent": user_agent}
+        headers = {'Content-Type': 'application/json'}
         self.s.headers.update(headers)
+        self.cookies = mojo_auth()
         self.r = None
 
     def get(self, url):
         logging.debug("Making api get call to %s" % url)
         try:
-            self.r = self.s.get(url, verify=False, headers={'Content-Type':'application/json'})
+            self.r = self.s.get(url, cookies=self.cookies)
         except:
             logging.error("connection to mojo failed")
         # convert response to json
@@ -48,7 +40,7 @@ class MOJOSession(object):
     def post(self, url, data):
         logging.debug("Making api post call to %s" % url)
         try:
-            self.r = self.s.post(url, data=data, verify=False, headers={'Content-Type':'application/json'})
+            self.r = self.s.post(url, data=data, cookies=self.cookies)
         except:
             logging.error("connection to mojo failed")
         # convert response to json
@@ -57,7 +49,7 @@ class MOJOSession(object):
     def put(self, url, data):
         logging.debug("Making api put call to %s" % url)
         try:
-            self.r = self.s.put(url, data=data, verify=False, headers={'Content-Type':'application/json'})
+            self.r = self.s.put(url, data=data, cookies=self.cookies)
         except:
             logging.error("connection to mojo failed")
         # convert response to json
@@ -66,12 +58,12 @@ class MOJOSession(object):
     def delete(self, url):
         logging.debug("Making api delete call to %s" % url)
         try:
-            self.r = self.s.delete(url, verify=False, headers={'Content-Type':'application/json'})
+            self.r = self.s.delete(url, cookies=self.cookies)
         except:
             logging.error("connection to mojo failed")
 
     def __json(self):
-        json_string = re.sub(r"throw.*;\s*","",self.r.text)
+        json_string = re.sub(r"throw.*;\s*", "", self.r.text)
         try:
             json_obj = json.loads(json_string)
             return json_obj
@@ -80,8 +72,10 @@ class MOJOSession(object):
 
 
 class MOJOApi(MOJOSession):
-    def __init__(self, username, password):
-        super(MOJOApi, self).__init__(username, password)
+    def __init__(self):
+        super(MOJOApi, self).__init__()
+        base_url = "https://mojo.redhat.com/api/core/v3/"
+        self.base_url = base_url
 
     def document2content(self, doc_id):
         """ Get content_id from document_id """
@@ -99,7 +93,7 @@ class MOJOApi(MOJOSession):
     def create_document(self, subject, text, place_id=None):
         """ Create document """
         logging.info("Creating document")
-        j_doc = {"content": {"type": "text/html"}, "type": "document"}
+        j_doc = dict(content={"type": "text/html"}, type="document")
         j_doc["subject"] = subject
         j_doc["content"]["text"] = text
         if place_id:
@@ -178,13 +172,14 @@ class MOJOApi(MOJOSession):
         url = requests.compat.urljoin(self.base_url, "checkpoints/%s" % place_id)
         return self.post(url, json.dumps(data))
 
-    def get_html(self, j_doc, prettify=True):
+    @staticmethod
+    def get_html(j_doc, prettify=True):
         """ Parse html content for document """
-#       parser = MyHTMLParser()
-#       parser.feed(j_doc["content"]["text"])
+        # parser = MyHTMLParser()
+        # parser.feed(j_doc["content"]["text"])
         soup = BeautifulSoup(j_doc["content"]["text"])
         doc_body = ''
-        for i in soup.find('div',{'class':'jive-rendered-content'}).contents:
+        for i in soup.find('div', {'class': 'jive-rendered-content'}).contents:
             doc_body += str(i)
         if not prettify:
             return doc_body
@@ -195,25 +190,28 @@ class MOJOApi(MOJOSession):
         f.close()
         return doc_body
 
-    def text2html(self, text, filename=None):
+    @staticmethod
+    def text2html(text):
         """ Generate html """
-        html_src = ''
+        html_src = '<body>'
         for l in text.splitlines():
             if re.match('^\s*$', l):
-                html_src = html_src + '<p>&nbsp;</p>\n'
+                html_src += '<p></p>\n'
             else:
+                l = l.replace('&', '&amp;')
+                l = l.replace('<', '&lt;')
+                l = l.replace('>', '&gt;')
                 html_src = html_src + '<p>'+l+'</p>\n'
-        if filename:
-            f = open(filename, 'w')
-            f.write(html_src)
-            f.close()
-        else:
-            #print(html_src)
-            pass
+        html_src += '</body>'
+        # for debugging
+        f = open('test.html', 'w')
+        f.write(html_src)
+        f.close()
+
         return html_src
 
 
-class EmailHelper():
+class EmailHelper(object):
     def __init__(self, mail_list=None, tmp_dir='/tmp/', filter_method='default', filter_key=None):
         self.tmp_dir = tmp_dir
         if not mail_list:
@@ -246,7 +244,7 @@ class EmailHelper():
         file_name = self.tmp_dir + name + '.txt'
         mbox = mailbox.mbox(file_name)
         for message in mbox:
-            #print re.sub('\n\s+', ' ', message['subject'])
+            # print re.sub('\n\s+', ' ', message['subject'])
             if self.filter(message):
                 yield {"subject": re.sub('\n\s+', ' ', message['subject']), "body": self.get_body(message)}
         mbox.close()
@@ -255,9 +253,10 @@ class EmailHelper():
         os.remove(self.tmp_dir + name + '.txt')
         os.remove(self.tmp_dir + name + '.txt.gz')
 
-    def get_body(self, msg):
+    @staticmethod
+    def get_body(msg):
         body = None
-        #Walk through the parts of the email to find the text body.
+        # Walk through the parts of the email to find the text body.
         if msg.is_multipart():
             for part in msg.walk():
                 # If part is multipart, walk through the subparts.
@@ -266,11 +265,11 @@ class EmailHelper():
                         if subpart.get_content_type() == 'text/plain':
                             # Get the subpart payload (i.e the message body)
                             body = subpart.get_payload(decode=True)
-                            #charset = subpart.get_charset()
+                            # charset = subpart.get_charset()
                 # Part isn't multipart so get the email body
                 elif part.get_content_type() == 'text/plain':
                     body = part.get_payload(decode=True)
-                    #charset = part.get_charset()
+                    # charset = part.get_charset()
         # If this isn't a multi-part message then get the payload (i.e the message body)
         elif msg.get_content_type() == 'text/plain':
             body = msg.get_payload(decode=True)
@@ -315,7 +314,7 @@ class EmailHelper():
             return self.filter_subject(msg)
 
 
-class Report():
+class Report(object):
     """
     report={'month': 'yyyy-mm', 'ref': 'email'}
     email={'subject': 'xxxx', 'body': 'xxxx', 'ref': 'mojo_link'}
@@ -353,11 +352,12 @@ class Report():
             self.months_update.append(str(year) + str(month))
             date = datetime.date(day=1, month=date.month, year=date.year) - datetime.timedelta(days=1)
 
-    def gen_report(self, test_list, catalog):
+    @staticmethod
+    def gen_report(test_list, catalog):
         html_src = '<p><span style="color: #ff0000;"><strong>'+catalog+'</strong></span></p>\n'
         for i in test_list:
             html_src = html_src + '<p><a href="' + i['ref'] + '">' + i['subject'] + '</a></p>\n'
-        html_src = html_src + '<p>&nbsp;</p>\n'
+        html_src += '<p>&nbsp;</p>\n'
         return html_src
 
     def publish_report(self, doc_id=None, dry_run=False):
@@ -376,7 +376,6 @@ class Report():
                 new = False
                 if not any(d['subject'] == i['subject'] for d in report_items):
                     new = True
-                    pass
                 if new and not dry_run:
                     mojo_link = self.mojo.create_document(i['subject'], self.mojo.text2html(i['body']).replace('\n', ''), place_id=self.place_id)
                     i['ref'] = mojo_link
@@ -389,7 +388,7 @@ class Report():
                     logging.info(i['subject'])
                     logging.info(i['ref'])
             self.email.clean_mbox(month)
-            html_src = html_src + self.gen_report(report_items, month)
+            html_src += self.gen_report(report_items, month)
         if dry_run:
             logging.info(html_src)
             return
@@ -417,9 +416,7 @@ class Report():
                     report_items = []
                 old_month = cur_month
             if i.next.name == 'a' and 'href' in i.next.attrs:
-                item = {}
-                item['subject'] = i.text.encode("ascii")
-                item['ref'] = i.next.attrs['href']
+                item = {'subject': i.text.encode("ascii"), 'ref': i.next.attrs['href']}
                 report_items.append(item)
         if old_month != '000000':
             self.months_list[old_month] = report_items
@@ -430,11 +427,11 @@ class Report():
         url_content = self.mojo.document2content(doc_id)
         j_doc = self.mojo.get(url_content)
         html = self.mojo.get_html(j_doc)
-        soup = BeautifulSoup(html)
+        soup = BeautifulSoup(html, "lxml")
         for a in soup.findAll('a'):
             url = a['href']
             logging.info(url)
-            id = re.sub(r"https://mojo.redhat.com/docs/DOC-", "", url)
+            id = re.sub(r'https://mojo.redhat.com/docs/DOC-', "", url)
             self.mojo.delete_document(id)
 
 
@@ -470,20 +467,18 @@ class MyHTMLParser(HTMLParser):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
     import sys
-    kerb_username = sys.argv[1]
-    kerb_password = sys.argv[2]
-    mojo = MOJOApi(kerb_username, kerb_password)
+    mojo = MOJOApi()
 
-    report = Report(mojo, mail_list='virt-qe-list', filter_method='body', filter_key='7.1+Virt+QE+-+Week+')
-    #report.load_report(1015195)
-    report.publish_report(1015195, dry_run=True)
-    #report.delete_report(1015172)
-    exit(0)
+    report = Report(mojo, mail_list='virt-qe-list', filter_method='body', filter_key='7.2+Virt+QE+-+Week+')
+    # report.load_report(1015195)
+    # report.publish_report(1015195, dry_run=True)
+    # report.publish_report()
+    report.delete_report(1060753)
+    # sys.exit(0)
 
-    x = mojo.delete_document(1009456)
-    print mojo.create_document("test", "content")
-    x = mojo.update_document(1009457, "update")
-    f = open("data.html", 'r')
-    c = f.read()
-    x = mojo.update_document(1009457, c.replace('\n', ''))
-    exit(0)
+    x = mojo.delete_document(1060753)
+    # print mojo.create_document("test", "content")
+    # x = mojo.update_document(1060649, "update")
+    # f = open("data.html", 'r')
+    # c = f.read()
+    # x = mojo.update_document(1060649, c.replace('\n', ''))

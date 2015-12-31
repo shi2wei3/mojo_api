@@ -1,6 +1,5 @@
 from mojo_api import MOJOApi
 import argparse
-import getpass
 import logging
 import json
 
@@ -35,21 +34,17 @@ def load_json_data(json_file):
 
 
 def main():
-    
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("-k", type=str, dest='url',
+    parser.add_argument("-u", type=str, dest='url',
                         help="mojo api url", required=True)
     parser.add_argument("-j", type=str, dest='json',
                         help="optional json data file to be posted to api url", required=False)
     parser.add_argument("-m", type=str, dest='method', choices=['get', 'post', 'put', 'delete'], default='get',
-                        help="put or post http method to use when posting json file, default post", required=False)
+                        help="put or post http  method to use when posting json file, default post", required=False)
     parser.add_argument("-o", type=str, dest='output',
                         help="output file to write reponse from mojo", required=False)
-    parser.add_argument("-u", type=str, dest='username',
-                        help="kerberos username, will be prompted if not specified", required=False)
-    parser.add_argument("-p", type=str, dest='password',
-                        help="kerberos password, will be prompted if not specified", required=False)
-    parser.add_argument("-d", action="store_true", dest='debug',
+    parser.add_argument("-v", action="store_true", dest='debug',
                         help="enable debug messages", required=False)
 
     args = parser.parse_args()
@@ -58,26 +53,16 @@ def main():
         logging.debug("Running in debug mode")
     else:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-        logging.info("Running in normal mode")
-    # get username/password
-    if not args.username:
-        username = raw_input("Username [%s]: " % getpass.getuser())
-        if not username:
-            username = getpass.getuser()
-    else: username = args.username
-    if not args.password:
-        password = getpass.getpass('Please enter your kerberos password:')
-    else: password = args.password
     # convert data file to json
     json_data = load_json_data(args.json)
     # setup mojo
-    mojo = MOJOApi(username, password)
+    mojo = MOJOApi()
     # make api call
     json_result = make_call(mojo, args.url, json_data, args.method)
     # save output if output specified
     if args.output:
         with open(args.output, 'w') as outfile:
-            json.dump(json_result, outfile, sort_keys=True, indent=4)            
+            json.dump(json_result, outfile, sort_keys=True, indent=4)
         logging.info("Output saved to %s" % args.output)
     else:
         logging.info("Result:\n%s" % json.dumps(json_result, sort_keys=True, indent=4))

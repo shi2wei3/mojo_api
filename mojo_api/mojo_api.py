@@ -204,9 +204,9 @@ class MOJOApi(MOJOSession):
                 html_src = html_src + '<p>'+l+'</p>\n'
         html_src += '</body>'
         # for debugging
-        f = open('test.html', 'w')
-        f.write(html_src)
-        f.close()
+        # f = open('test.html', 'w')
+        # f.write(html_src)
+        # f.close()
 
         return html_src
 

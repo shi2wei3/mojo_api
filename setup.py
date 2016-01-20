@@ -45,7 +45,7 @@ setup(name=name,
       packages=find_packages(),
       include_package_data=True,
       zip_safe=False,
-      requires=['requests'],
+      requires=['requests', 'beautifulsoup4'],
       cmdclass={
         "rpm": RPMCommand
       },
